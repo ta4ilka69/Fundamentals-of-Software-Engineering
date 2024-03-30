@@ -19,4 +19,8 @@ public class I implements K {
     public java.util.List<String> jj() {
         return new java.util.ArrayList<String>();
     }
+
+    public double ee() {
+        return 500.100;
+    }
 }
