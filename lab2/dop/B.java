@@ -7,8 +7,6 @@ public class BigJavaFile {
       File inputFile = new File("input.txt");
       FileReader fileReader = new FileReader(inputFile);
       BufferedReader bufferedReader = new BufferedReader(fileReader);
-      // Output file
-      FileWriter fileWriter = new FileWriter(outputFile);
       BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
       // Read from input file and write to output file
       String line;
