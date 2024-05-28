@@ -1,0 +1,233 @@
+import java.util.zip.Checksum
+
+plugins {
+    id 'java'
+    id 'war'
+}
+
+group 'itmo.web'
+version '1.0'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'javax.enterprise:cdi-api:1.2'
+    implementation 'javax.faces:jsf-api:2.1'
+    implementation 'org.primefaces:primefaces:8.0'
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+    implementation 'javax.persistence:javax.persistence-api:2.2'
+    implementation 'org.postgresql:postgresql:42.5.0'
+    implementation 'org.hibernate:hibernate-core:5.4.20.Final'
+    implementation 'org.projectlombok:lombok:1.18.22'
+    compileOnly 'org.projectlombok:lombok:1.18.22'
+    annotationProcessor 'org.projectlombok:lombok:1.18.22'
+    testImplementation 'org.projectlombok:lombok:1.18.22'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.22'
+    testImplementation 'junit:junit:4.13'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+apply plugin: 'java'
+apply plugin: 'war'
+
+task compileAll (type: JavaCompile) {
+    description ' Компиляция исходных кодов проекта'
+    source = sourceSets.main.java.srcDirs
+    classpath = sourceSets.main.compileClasspath
+    destinationDirectory = new File("${buildDir}/classes/java/main")
+}
+
+task applyResources (type: Copy){
+    description 'Process resources for the project'
+
+    from 'src/main/resources'
+    into "$buildDir/resources/main"
+}
+
+task buildWar(type: War, dependsOn: [compileAll, applyResources], group: 'build') {
+    description 'Компиляция исходных кодов проекта и их упаковка в исполняемый jar-архив. Компиляцию исходных кодов реализовать посредством вызова цели compile'
+
+    from 'src/main/webapp'
+    webXml = file('src/main/webapp/WEB-INF/web.xml')
+    classpath = configurations.runtimeClasspath
+    destinationDirectory = file("$buildDir/libs")
+    archiveBaseName = "${project.name}"
+    version = "${project.version}"
+
+    // Set the duplicate handling strategy
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    webInf {
+        from('src/main/webapp/WEB-INF') {
+            into('WEB-INF')
+            exclude('web.xml')
+        }
+    }
+}
+
+task cleanBuild(type: Delete, group: 'build') {
+    description 'Удаление скомпилированных классов проекта и всех временных файлов (если они есть)'
+    delete rootProject.buildDir
+}
+
+task runTests(type: Test, dependsOn: buildWar, group: 'verification') {
+    description = 'Запуск junit-тестов проекта. Перед запуском тестов необходимо осуществить сборку проекта (цель build)'
+    group = 'verification'
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
+import java.security.MessageDigest
+import java.nio.file.Path
+
+def getMD5(Path filePath) {
+    try {
+        MessageDigest md5 = MessageDigest.getInstance("MD5")
+        md5.update(Files.readAllBytes(filePath))
+        return md5.digest().encodeHex().toString()
+    } catch (IOException e) {
+        logger.warn("Impossible to read ${filePath}: ${e.message}")
+        return ""
+    }
+}
+
+def getSHA1(Path filePath) {
+    try {
+        MessageDigest sha1 = MessageDigest.getInstance("SHA-1")
+        sha1.update(Files.readAllBytes(filePath))
+        return sha1.digest().encodeHex().toString()
+    } catch (IOException e) {
+        logger.warn("Impossible to read ${filePath}: ${e.message}")
+        return ""
+    }
+}
+
+task generateChecksums() {
+    description = "Generates checksums for project files"
+    def output = file("$buildDir/checksums.txt")
+
+    outputs.file output
+    def projectFiles = fileTree(projectDir) {
+        exclude '.gradle', 'build', 'gradlew', 'gradlew.bat'
+    }
+    doLast {
+        output.delete()
+        projectFiles.each { file ->
+            if (!file.isDirectory()) {
+                output << "${file.name}\n"
+                output << "  MD5: ${getMD5(file.toPath())}\n"
+                output << "  SHA-1: ${getSHA1(file.toPath())}\n\n"
+            }
+        }
+    }
+}
+
+task createJavadoc(type: Javadoc, group: 'documentation') {
+    source = sourceSets.main.allJava
+    classpath = files(configurations.compileClasspath)
+    destinationDir = file("$buildDir/docs/javadoc")
+    options.encoding = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+    options.links("https://docs.oracle.com/en/java/javase/22/docs/api/")
+    exclude 'com/example/internal/**'
+    failOnError false
+}
+
+task doc(dependsOn: [createJavadoc, generateChecksums], type: Jar) {
+    description = "Generates project documentation and adds checksums to MANIFEST.MF"
+
+    from fileTree("$buildDir/docs")
+    exclude "**/*.html"
+
+    manifest {
+        attributes(
+                "Implementation-Title": project.name,
+                "Implementation-Version": project.version
+        )
+        def checksums = file("$buildDir/checksums.txt")
+        checksums.parentFile.mkdirs()
+        if (checksums.exists()){
+            attributes("Checksums": checksums.text)
+        }
+    }
+}
+
+def environments = []
+
+task defineEnvironments(group: 'build setup') {
+    description = "Initializing envoirnment"
+
+    environments = []
+
+    def envFile = file("environments.properties")
+    if (envFile.exists()) {
+        envFile.withInputStream { stream ->
+            def props = new Properties()
+            props.load(stream)
+            props.each { key, value ->
+                def envName = key
+                def (jdk, jvmArgs) = value.split(":")
+                environments << [name: envName, jdk: jdk, jvmArgs: jvmArgs]
+            }
+        }
+    }
+    else{
+        println "No configuration file"
+    }
+}
+
+import java.nio.file.Files
+
+task explodeWar(type: Copy) {
+    def warPath = "$buildDir/libs/lab3-1.0.war"
+    def explodedDirPath = "$buildDir/libs/exploded/lab3-1.0.war"
+    def classesDir = "$explodedDirPath/WEB-INF/classes"
+    def metaInfDir = "$projectDir/src/main/resources/META-INF"
+    def oldMetaInf = "$buildDir/libs/exploded/lab3-1.0.war/WEB-INF/WEB-INF"
+    from zipTree(warPath)
+    into explodedDirPath
+
+    outputs.dir(classesDir)
+    doLast {
+        project.delete(oldMetaInf)
+        project.copy {
+            from("$buildDir/classes/java/main")
+            into(classesDir)
+        }
+        project.copy {
+            from(metaInfDir)
+            into("$classesDir/META-INF")
+        }
+        project.delete("$classesDir/META-INF/MANIFEST.MF")
+    }
+}
+
+task env(dependsOn: [defineEnvironments, buildWar, explodeWar]) {
+    description = "Launch program in alternative environment"
+
+    doLast {
+        environments.each { environment ->
+            println "Launching WildFly for environment: wildfly-${environment.name}"
+
+            def wildflyHome = "wildfly-${environment.name}"
+
+            def wildflyCommandBat = [
+                    "./${wildflyHome}/bin/standalone.bat",
+                    "-Dfile.encoding=windows-1251 -classpath /mnt/c/Users/ronya/AppData/Local/Temp/classpath1683562984.jar com.intellij.javaee.oss.process.JavaeeProcess 54136 com.intellij.javaee.oss.jboss.agent.WildFly11Agent"
+            ] + environment.jvmArgs
+
+            exec {
+                commandLine wildflyCommandBat[0], wildflyCommandBat[1], wildflyCommandBat[2]
+            }
+        }
+    }
+}

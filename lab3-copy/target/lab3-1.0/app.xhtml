@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://java.sun.com/jsf/html"
+      xmlns:ui="http://java.sun.com/jsf/facelets" xmlns:p="http://primefaces.org/ui"
+      xmlns:f="http://java.sun.com/jsf/core">
+
+
+<ui:composition template="templates/template_layout.xhtml">
+    <ui:define name="head">
+        <title>Лабораторная №3 - график</title>
+        <meta name="description" content="Лабораторная работа №3 по дисциплине веб-программирование - график"/>
+    </ui:define>
+
+    <ui:define name="content">
+        <div class="return_link">
+            <h4><span><h:link value="Вернуться на домашную страницу" outcome="index.xhtml"/></span></h4>
+        </div>
+        <div class="graph">
+            <svg width="300" height="300" xmlns="http://www.w3.org/2000/svg">
+                <line x1="0" y1="150" x2="300" y2="150" stroke="#000720"/>
+                <line x1="150" y1="0" x2="150" y2="300" stroke="#000720"/>
+                <polygon points="300,150 295,155 295, 145" fill="#000720" stroke="#000720"/>
+                <polygon points="150,0 145,5 155,5" fill="#000720" stroke="#000720"/>
+                <text x="282" y="170">x</text>
+                <text x="163" y="14">y</text>
+                <line x1="270" y1="148" x2="270" y2="152" stroke="#000720"/>
+                <text x="265" y="140">
+                    <tspan class="graph_value">R</tspan>
+                </text>
+                <line x1="210" y1="148" x2="210" y2="152" stroke="#000720"/>
+                <text x="200" y="140">
+                    <tspan class="graph_value">R</tspan>
+                    /2
+                </text>
+                <line x1="90" y1="148" x2="90" y2="152" stroke="#000720"/>
+                <text x="75" y="140">-
+                    <tspan class="graph_value">R</tspan>
+                    /2
+                </text>
+                <line x1="30" y1="148" x2="30" y2="152" stroke="#000720"/>
+                <text x="20" y="140">-
+                    <tspan class="graph_value">R</tspan>
+                </text>
+                <line x1="148" y1="30" x2="152" y2="30" stroke="#000720"/>
+                <text x="156" y="35">
+                    <tspan class="graph_value">R</tspan>
+                </text>
+                <line x1="148" y1="90" x2="152" y2="90" stroke="#000720"/>
+                <text x="156" y="95">
+                    <tspan class="graph_value">R</tspan>
+                    /2
+                </text>
+                <line x1="148" y1="210" x2="152" y2="210" stroke="#000720"/>
+                <text x="156" y="215">-
+                    <tspan class="graph_value">R</tspan>
+                    /2
+                </text>
+                <line x1="148" y1="270" x2="152" y2="270" stroke="#000720"/>
+                <text x="156" y="275">-
+                    <tspan class="graph_value">R</tspan>
+                </text>
+
+                <polygon points="300,150 295,155 295, 145" fill="#000720" stroke="#000720"/>
+
+                <polygon points="150,0 145,5 155,5" fill="#000720" stroke="#000720"/>
+
+                <rect x="150" y="30" width="60" height="120" fill-opacity="0.4" stroke="navy" fill="blue"/>
+
+                <polygon points="150,150 150,270 30, 150" fill-opacity="0.4" stroke="navy" fill="blue"/>
+
+                <path d="M150 150 L 270 150 C 270 150 270 270 150 270 L Z" fill-opacity="0.4" stroke="navy"
+                      fill="blue"/>
+                <circle id="pointer" r="5" cx="150" cy="150" fill-opacity="0.7" fill="red" stroke="firebrick"
+                        visibility="hidden"/>
+
+            </svg>
+
+        </div>
+        <h:form id="form">
+            <label for="X">Изменение X</label>
+            <br/>
+            <div class="checkboxes">
+                <h:inputHidden id="X" name="x" value="#{myBean.currPoint.x}">
+                    <f:validator validatorId="validatorX"/>
+                </h:inputHidden>
+                <h:selectManyCheckbox id="X-check" value="#{myBean.selectedItems}"
+                                      valueChangeListener="#{myBean.handleSelectionChange}"
+                                      styleClass="checkboxesValues">
+                    <f:selectItems value="#{myBean.availableItems}" var="item" itemValue="#{item}" itemLabel="#{item}"/>
+                </h:selectManyCheckbox>
+            </div>
+            <br/>
+
+            <div class="text_area">
+                <label for="Y">Изменение Y</label>
+                <br/>
+                <p:inputText type="number" required="required" id="Y" placeholder="-5 до 3" maxlength="15"
+                             value="#{myBean.currPoint.y}">
+                    <f:validator validatorId="validatorY"/>
+                </p:inputText>
+            </div>
+
+            <div class="radio_buttons">
+                <label>Изменение R</label>
+
+                <h:selectOneRadio value="#{myBean.currPoint.r}" id="R" onchange="reactToChangeRRadio(this.value)" validator="validatorR">
+                    <f:selectItem itemLabel="1" itemValue="1"/>
+                    <f:selectItem itemLabel="1.5" itemValue="1.5"/>
+                    <f:selectItem itemLabel="2" itemValue="2"/>
+                    <f:selectItem itemLabel="2.5" itemValue="2.5"/>
+                    <f:selectItem itemLabel="3" itemValue="3"/>
+                </h:selectOneRadio>
+            </div>
+
+            <div class="Buttons">
+                <p:commandButton type="submit" name="sendRequest" id="submitButton" update="main__table"
+                                 styleClass="submitButton" oncomplete="updateGraph();"
+                                 action="#{myBean.addResult}" value="Проверить"/>
+                <p:commandButton id="clearButton" value="Очистить" styleClass="clearButton"
+                                 action="#{myBean.clearResults}" immediate="true" update="main__table"/>
+            </div>
+        </h:form>
+        <div id="outputContainer">
+            <p:messages id="messages" showSummary="false" showDetail="true" closable="true">
+                <p:autoUpdate/>
+            </p:messages>
+            <h4><span class="outputStub notification">Результаты отсутствуют</span></h4>
+        </div>
+        <div class="main__table-block">
+            <p:dataTable id="main__table" var="p" value="#{myBean.points}">
+                <p:column headerText="X">
+                    <h:outputText value="#{p.x}"/>
+                </p:column>
+                <p:column headerText="Y">
+                    <h:outputText value="#{p.y}"/>
+                </p:column>
+                <p:column headerText="R">
+                    <h:outputText value="#{p.r}"/>
+                </p:column>
+                <p:column headerText="Запуск">
+                    <h:outputText value="#{p.bornDate}"/>
+                </p:column>
+                <p:column headerText="Результат" style="color:#{p.color}">
+                    <h:outputText value="#{p.stringSuccess}"/>
+                </p:column>
+            </p:dataTable>
+        </div>
+        <h:outputScript library="js" name="validator.js"/>
+        <h:outputScript library="js" name="graph_drawer.js"/>
+    </ui:define>
+
+
+</ui:composition>
+
+
+</html>
