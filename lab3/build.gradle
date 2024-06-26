@@ -1,5 +1,3 @@
-import java.util.zip.Checksum
-
 plugins {
     id 'java'
     id 'war'
@@ -33,8 +31,90 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+public class UrlInBrowserPluginExtension {
+    private String successBuild = "https://www.youtube.com/watch?v=I-N_LsrABzE";//Билд
+    private String successJavadoc = "https://www.youtube.com/watch?v=fdILVMayJyY";//javadoc
+    private String successChecksums = "https://www.youtube.com/watch?v=iBdm9suRYS4";//checksums
+    private String successClean = "https://www.youtube.com/watch?v=kKDhRcnwaC4";//cleanBuild
+    String getSuccessBuild() {
+        return successBuild
+    }
+
+    String getSuccessJavadoc() {
+        return successJavadoc
+    }
+
+    String getSuccessChecksums() {
+        return successChecksums
+    }
+
+    String getSuccessClean() {
+        return successClean
+    }
+
+    void setSuccessBuild(String successBuild) {
+        this.successBuild = successBuild
+    }
+
+    void setSuccessJavadoc(String successJavadoc) {
+        this.successJavadoc = successJavadoc
+    }
+
+    void setSuccessChecksums(String successChecksums) {
+        this.successChecksums = successChecksums
+    }
+
+    void setSuccessClean(String successClean) {
+        this.successClean = successClean
+    }
+}
+
+class YoutubeTask extends DefaultTask {
+    @Input
+    String path
+    YoutubeTask(){
+        this.path = ""
+    }
+    @TaskAction
+    void execute() {
+        if (path != "")
+            java.awt.Desktop.desktop.browse path.toURI()
+    }
+}
+
+public class UrlInBrowserPlugin implements Plugin<Project> {
+    @Override
+    public void apply(Project project) {
+        UrlInBrowserPluginExtension extension = project.getExtensions()
+                .create("youtubeLinks", UrlInBrowserPluginExtension.class);
+        project.task("urlBuild", type: YoutubeTask)
+                .doLast(task -> {
+                    path = extension.getSuccessBuild()
+                });
+        project.task("urlJavadoc", type: YoutubeTask)
+            .doLast(task -> {
+                path extension.getSuccessJavadoc()
+            })
+        project.task("urlChecksums", type: YoutubeTask)
+                .doLast(task -> {
+                    path extension.getSuccessChecksums()
+                })
+        project.task("urlClean", type: YoutubeTask)
+                .doLast(task -> {
+                    path extension.getSuccessClean()
+                })
+    }
+}
+
 apply plugin: 'java'
 apply plugin: 'war'
+apply plugin: 'groovy'
+apply plugin: UrlInBrowserPlugin
+
+
+//youtubeLinks{
+//    successBuild = "https://se.ifmo.ru/courses/software-engineering-basics"
+//}
 
 task compileAll (type: JavaCompile) {
     description ' Компиляция исходных кодов проекта'
@@ -50,7 +130,7 @@ task applyResources (type: Copy){
     into "$buildDir/resources/main"
 }
 
-task buildWar(type: War, dependsOn: [compileAll, applyResources], group: 'build') {
+task buildWar(type: War, dependsOn: [compileAll, applyResources, urlBuild], group: 'build') {
     description 'Компиляция исходных кодов проекта и их упаковка в исполняемый jar-архив. Компиляцию исходных кодов реализовать посредством вызова цели compile'
 
     from 'src/main/webapp'
@@ -60,7 +140,6 @@ task buildWar(type: War, dependsOn: [compileAll, applyResources], group: 'build'
     archiveBaseName = "${project.name}"
     version = "${project.version}"
 
-    // Set the duplicate handling strategy
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     webInf {
@@ -69,11 +148,17 @@ task buildWar(type: War, dependsOn: [compileAll, applyResources], group: 'build'
             exclude('web.xml')
         }
     }
+    doLast {
+        urlBuild.execute()
+    }
 }
 
-task cleanBuild(type: Delete, group: 'build') {
+task cleanBuild(type: Delete, group: 'build', dependsOn: urlClean) {
     description 'Удаление скомпилированных классов проекта и всех временных файлов (если они есть)'
     delete rootProject.buildDir
+    doLast {
+        urlClean.execute()
+    }
 }
 
 task runTests(type: Test, dependsOn: buildWar, group: 'verification') {
@@ -110,7 +195,7 @@ def getSHA1(Path filePath) {
     }
 }
 
-task generateChecksums() {
+task generateChecksums(dependsOn: urlChecksums) {
     description = "Generates checksums for project files"
     def output = file("$buildDir/checksums.txt")
 
@@ -127,10 +212,11 @@ task generateChecksums() {
                 output << "  SHA-1: ${getSHA1(file.toPath())}\n\n"
             }
         }
+        urlChecksums.execute()
     }
 }
 
-task createJavadoc(type: Javadoc, group: 'documentation') {
+task createJavadoc(type: Javadoc, group: 'documentation', dependsOn: urlJavadoc) {
     source = sourceSets.main.allJava
     classpath = files(configurations.compileClasspath)
     destinationDir = file("$buildDir/docs/javadoc")
@@ -140,6 +226,9 @@ task createJavadoc(type: Javadoc, group: 'documentation') {
     options.links("https://docs.oracle.com/en/java/javase/22/docs/api/")
     exclude 'com/example/internal/**'
     failOnError false
+    doLast{
+        urlJavadoc.execute()
+    }
 }
 
 task doc(dependsOn: [createJavadoc, generateChecksums], type: Jar) {
@@ -187,7 +276,7 @@ task defineEnvironments(group: 'build setup') {
 
 import java.nio.file.Files
 
-task explodeWar(type: Copy) {
+task explodeWar(type: Copy,dependsOn: buildWar) {
     def warPath = "$buildDir/libs/lab3-1.0.war"
     def explodedDirPath = "$buildDir/libs/exploded/lab3-1.0.war"
     def classesDir = "$explodedDirPath/WEB-INF/classes"
@@ -225,9 +314,16 @@ task env(dependsOn: [defineEnvironments, buildWar, explodeWar]) {
                     "-Dfile.encoding=windows-1251 -classpath /mnt/c/Users/ronya/AppData/Local/Temp/classpath1683562984.jar com.intellij.javaee.oss.process.JavaeeProcess 54136 com.intellij.javaee.oss.jboss.agent.WildFly11Agent"
             ] + environment.jvmArgs
 
+            def output = file("$projectDir/wildfly-20.0.1.Final/bin/standalone.conf.bat")
+            String text = output.text
+            List<String> lines = text.readLines()
+            lines.removeLast()
+            output.text = lines.join('\n')
+            output << "\nset \"JAVA_HOME=C:\\Users\\ronya\\.jdks\\${environment.jdk}\""
             exec {
                 commandLine wildflyCommandBat[0], wildflyCommandBat[1], wildflyCommandBat[2]
             }
         }
     }
 }
+
